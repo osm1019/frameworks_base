@@ -211,11 +211,20 @@ public class PixelPropsUtils {
         if (pkgName.contains("com.google.android.gms")) {
             final String processName = Application.getProcessName().toLowerCase();
             sIsGms = List.of(".persistent", ".unstable").stream().anyMatch(processName::contains);
+        sIsFinsky = pkgName.equals("com.android.vending");
+        sNeedsWASpoof = List.of("pixelmigrate", "restore", "snapchat").stream().anyMatch(pkgName::contains);
+        if (pkgName.equals("com.google.android.gms")) {
+            final String processName = Application.getProcessName().toLowerCase();
+            sIsGms = List.of("com.google.android.gms.persistent", "com.google.android.gms.unstable").stream().anyMatch(processName::contains);
+
         }
         if (sNeedsWASpoof || sIsGms) {
              spoofBuildGms();
         }
+
         if (pkgName.startsWith("com.google.")
+
+        if (pkgName.startsWith("com.google.") || !sIsFinsky || !sNeedsWASpoof || !sIsGms
                 || Arrays.asList(extraPackagesToChange).contains(pkgName)) {
 
             boolean isPixelDevice = Arrays.asList(pixelCodenames).contains(SystemProperties.get(DEVICE));
