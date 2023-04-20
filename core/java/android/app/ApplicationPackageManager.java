@@ -122,6 +122,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.os.SomeArgs;
 import com.android.internal.util.UserIcons;
 
+import com.nvidia.NvAppProfileService;
 
 import dalvik.system.VMRuntime;
 
@@ -169,6 +170,7 @@ public class ApplicationPackageManager extends PackageManager {
     private volatile UserManager mUserManager;
     private volatile PermissionManager mPermissionManager;
     private volatile PackageInstaller mInstaller;
+    private volatile NvAppProfileService mAppProfileService;
     private volatile ArtManager mArtManager;
     private volatile DevicePolicyManager mDevicePolicyManager;
     private volatile String mPermissionsControllerPackageName;
@@ -476,6 +478,14 @@ public class ApplicationPackageManager extends PackageManager {
                 com.android.internal.R.bool.config_wirelessConsentRequired);
     }
 
+    /** @hide */
+    @Override
+    public NvAppProfileService getAppProfileService() {
+        if (mAppProfileService == null) {
+            mAppProfileService = new NvAppProfileService(mContext);
+        }
+        return mAppProfileService;
+    }
 
     @Override
     public ApplicationInfo getApplicationInfo(String packageName, int flags)
@@ -840,13 +850,7 @@ public class ApplicationPackageManager extends PackageManager {
             "com.google.lens.feature.CAMERA_INTEGRATION",
             "com.google.photos.trust_debug_certs",
             "com.google.android.feature.AER_OPTIMIZED",
-            "com.google.android.feature.NEXT_GENERATION_ASSISTANT",
-            "com.google.android.feature.ADAPTIVE_CHARGING",
-            "com.google.android.feature.DREAMLINER",
-            "android.software.game_service",
-            "com.google.android.feature.EXCHANGE_6_2",
-            "com.google.android.apps.dialer.call_recording_audio",
-            "com.google.android.apps.dialer.SUPPORTED"
+            "com.google.android.feature.NEXT_GENERATION_ASSISTANT"
     };
 
     private static final String[] featuresNexus = {
