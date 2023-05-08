@@ -34,7 +34,6 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.PackageManagerInternal;
-import android.content.pm.PackageParser;
 import android.content.pm.PermissionInfo;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
@@ -70,7 +69,6 @@ import android.util.Xml;
 import com.android.internal.R;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.XmlUtils;
-import com.android.internal.util.xtended.OmniJawsClient;
 import com.android.server.LocalServices;
 import com.android.server.ServiceThread;
 import com.android.server.pm.KnownPackages;
@@ -142,11 +140,6 @@ final class DefaultPermissionGrantPolicy {
         PHONE_PERMISSIONS.add(Manifest.permission.PROCESS_OUTGOING_CALLS);
     }
 
-    private static final Set<String> WRITE_PERMISSIONS = new ArraySet<>();
-    static {
-        WRITE_PERMISSIONS.add(Manifest.permission.WRITE_SETTINGS);
-    }
-
     private static final Set<String> CONTACTS_PERMISSIONS = new ArraySet<>();
     static {
         CONTACTS_PERMISSIONS.add(Manifest.permission.READ_CONTACTS);
@@ -210,6 +203,24 @@ final class DefaultPermissionGrantPolicy {
         SENSORS_PERMISSIONS.add(Manifest.permission.BODY_SENSORS_BACKGROUND);
     }
 
+    private static final Set<String> GOOGLE_RESTORE_PERMISSIONS_FIXED = new ArraySet<>();
+    static {
+        GOOGLE_RESTORE_PERMISSIONS_FIXED.add(Manifest.permission.MANAGE_USB);
+        GOOGLE_RESTORE_PERMISSIONS_FIXED.add(Manifest.permission.READ_PRIVILEGED_PHONE_STATE);
+        GOOGLE_RESTORE_PERMISSIONS_FIXED.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        GOOGLE_RESTORE_PERMISSIONS_FIXED.add(Manifest.permission.ACCESS_NETWORK_STATE);
+    }
+
+    private static final Set<String> GOOGLE_RESTORE_PERMISSIONS = new ArraySet<>();
+    static {
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.MANAGE_EXTERNAL_STORAGE);
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.INTERNET);
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.WRITE_CALL_LOG);
+        GOOGLE_RESTORE_PERMISSIONS.add(Manifest.permission.READ_CALL_LOG);
+    }
+
     private static final Set<String> STORAGE_PERMISSIONS = new ArraySet<>();
     static {
         STORAGE_PERMISSIONS.add(Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -232,11 +243,6 @@ final class DefaultPermissionGrantPolicy {
     private static final Set<String> NOTIFICATION_PERMISSIONS = new ArraySet<>();
     static {
         NOTIFICATION_PERMISSIONS.add(Manifest.permission.POST_NOTIFICATIONS);
-    }
-
-    private static final Set<String> SUSPEND_APP_PERMISSIONS = new ArraySet<>();
-    static {
-        SUSPEND_APP_PERMISSIONS.add(Manifest.permission.SUSPEND_APPS);
     }
 
     private static final int MSG_READ_DEFAULT_PERMISSION_EXCEPTIONS = 1;
@@ -320,7 +326,6 @@ final class DefaultPermissionGrantPolicy {
                 return mContext.getPackageManager().getPackageInfo(pkg,
                         DEFAULT_PACKAGE_INFO_QUERY_FLAGS);
             } catch (NameNotFoundException e) {
-                Slog.e(TAG, "Package not found: " + pkg);
                 return null;
             }
         }
@@ -776,6 +781,19 @@ final class DefaultPermissionGrantPolicy {
                         Intent.CATEGORY_APP_EMAIL, userId),
                 userId, CONTACTS_PERMISSIONS, CALENDAR_PERMISSIONS);
 
+        // Browser
+        String browserPackage = ArrayUtils.firstOrNull(getKnownPackages(
+                KnownPackages.PACKAGE_BROWSER, userId));
+        if (browserPackage == null) {
+            browserPackage = getDefaultSystemHandlerActivityPackageForCategory(pm,
+                    Intent.CATEGORY_APP_BROWSER, userId);
+            if (!pm.isSystemPackage(browserPackage)) {
+                browserPackage = null;
+            }
+        }
+        grantPermissionsToPackage(pm, browserPackage, userId, false /* ignoreSystemPackage */,
+                true /*whitelistRestrictedPermissions*/, FOREGROUND_LOCATION_PERMISSIONS);
+
         // Voice interaction
         if (voiceInteractPackageNames != null) {
             for (String voiceInteractPackageName : voiceInteractPackageNames) {
@@ -902,6 +920,9 @@ final class DefaultPermissionGrantPolicy {
                     COARSE_BACKGROUND_LOCATION_PERMISSIONS, CONTACTS_PERMISSIONS);
         }
 
+        // Updater app
+        grantSystemFixedPermissionsToSystemPackage(pm, "org.evolution.ota", userId, NOTIFICATION_PERMISSIONS);
+
         // There is no real "marker" interface to identify the shared storage backup, it is
         // hardcoded in BackupManagerService.SHARED_BACKUP_AGENT_PACKAGE.
         grantSystemFixedPermissionsToSystemPackage(pm, "com.android.sharedstoragebackup", userId,
@@ -917,94 +938,12 @@ final class DefaultPermissionGrantPolicy {
         grantPermissionsToSystemPackage(pm, getDefaultSystemHandlerServicePackage(pm,
                         commonServiceAction, userId), userId, NOTIFICATION_PERMISSIONS);
 
-        // Alarm Clock
         String clockAppPackage = getDefaultSystemHandlerActivityPackage(pm, AlarmClock.ACTION_SET_ALARM, userId);
         grantPermissionsToSystemPackage(pm, clockAppPackage, userId, NOTIFICATION_PERMISSIONS);
-        
+
         // Android Setup
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.restore", userId, PHONE_PERMISSIONS,
-                CONTACTS_PERMISSIONS, SMS_PERMISSIONS, STORAGE_PERMISSIONS);
-
-        // Carrier Setup
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.carriersetup", userId, PHONE_PERMISSIONS,
-                SMS_PERMISSIONS);
-
-        // Flipendo
-        grantSystemFixedPermissionsToSystemPackage(pm,
-                getDefaultProviderAuthorityPackage("com.google.android.flipendo", userId),
-                userId, SUSPEND_APP_PERMISSIONS);
-
-        // Mediascanner
-        grantSystemFixedPermissionsToSystemPackage(pm,
-                getDefaultProviderAuthorityPackage("com.android.providers.media.MediaProvider", userId), userId,
-                STORAGE_PERMISSIONS);
-
-        // Device Personalization Services
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.as", userId, CALENDAR_PERMISSIONS,
-                CAMERA_PERMISSIONS, CONTACTS_PERMISSIONS, ALWAYS_LOCATION_PERMISSIONS,
-                MICROPHONE_PERMISSIONS, PHONE_PERMISSIONS, SMS_PERMISSIONS);
-
-        // Google sound picker
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.soundpicker", userId, STORAGE_PERMISSIONS);
-
-        // Google Wallpapers
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.wallpaper", userId, PHONE_PERMISSIONS,
-                STORAGE_PERMISSIONS);
-
-        // Pixel Launcher
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.nexuslauncher", userId, PHONE_PERMISSIONS,
-                STORAGE_PERMISSIONS);
-
-        // Pixel Live Wallpapers
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.pixel.livewallpaper", userId, ALWAYS_LOCATION_PERMISSIONS);
-
-        // Google Markup
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.markup", userId, STORAGE_PERMISSIONS);
-
-        // Google Photos
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.photos", userId, CONTACTS_PERMISSIONS,
-                PHONE_PERMISSIONS, STORAGE_PERMISSIONS, ALWAYS_LOCATION_PERMISSIONS);
-
-        // Google Recorder
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.recorder", userId, MICROPHONE_PERMISSIONS,
-                ALWAYS_LOCATION_PERMISSIONS);
-
-        // SafetyHub
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.safetyhub", userId, SENSORS_PERMISSIONS,
-                CONTACTS_PERMISSIONS, ALWAYS_LOCATION_PERMISSIONS, MICROPHONE_PERMISSIONS, PHONE_PERMISSIONS);
-
-        // Settings Services
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.settings.intelligence", userId, PHONE_PERMISSIONS,
-                ALWAYS_LOCATION_PERMISSIONS);
-
-        // OnePlus Gallery
-        grantSystemFixedPermissionsToSystemPackage(pm, "com.oneplus.gallery", userId,
-                STORAGE_PERMISSIONS);
-
-        // Mediascanner
-        grantSystemFixedPermissionsToSystemPackage(pm,
-                getDefaultProviderAuthorityPackage("com.android.providers.media.MediaProvider", userId), userId,
-                STORAGE_PERMISSIONS);
-
-        // Google sound picker
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.soundpicker", userId, STORAGE_PERMISSIONS);
-
-        // Google Wallpapers
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.wallpaper", userId, STORAGE_PERMISSIONS);
-
-        // Pixel Live Wallpapers
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.pixel.livewallpaper", userId, ALWAYS_LOCATION_PERMISSIONS);
-
-        // Google Markup
-        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.markup", userId, STORAGE_PERMISSIONS);
-
-        // OnePlus Camera
-        grantSystemFixedPermissionsToSystemPackage(pm,
-                getDefaultProviderAuthorityPackage("com.oneplus.camera", userId),
-                userId, WRITE_PERMISSIONS);
-
-        // ThemePicker
-        grantSystemFixedPermissionsToSystemPackage(pm, "com.android.wallpaper", userId, STORAGE_PERMISSIONS);
+        grantPermissionsToSystemPackage(pm,"com.google.android.apps.restore", userId, ALWAYS_LOCATION_PERMISSIONS, GOOGLE_RESTORE_PERMISSIONS);
+        grantSystemFixedPermissionsToSystemPackage(pm,"com.google.android.apps.restore", userId, GOOGLE_RESTORE_PERMISSIONS_FIXED);
 
         String[] notifPackages = {
             "com.android.camera2",
@@ -1023,9 +962,13 @@ final class DefaultPermissionGrantPolicy {
                 false /* ignoreSystemPackage */, true /*whitelistRestrictedPermissions*/,
                 PHONE_PERMISSIONS);
 
-        // OmniJaws
-        String omnijawsServicePackageName = "org.omnirom.omnijaws";
-        grantSystemFixedPermissionsToSystemPackage(pm, omnijawsServicePackageName, userId, ALWAYS_LOCATION_PERMISSIONS);
+        // OnePlus Gallery
+        grantSystemFixedPermissionsToSystemPackage(pm, "com.oneplus.gallery", userId,
+                STORAGE_PERMISSIONS);
+
+        // MIUI Gallery
+        grantSystemFixedPermissionsToSystemPackage(pm, "com.miui.gallery", userId,
+                STORAGE_PERMISSIONS);
     }
 
     private String getDefaultSystemHandlerActivityPackageForCategory(PackageManagerWrapper pm,

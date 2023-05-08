@@ -122,8 +122,6 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.os.SomeArgs;
 import com.android.internal.util.UserIcons;
 
-import com.nvidia.NvAppProfileService;
-
 import dalvik.system.VMRuntime;
 
 import libcore.util.EmptyArray;
@@ -170,7 +168,6 @@ public class ApplicationPackageManager extends PackageManager {
     private volatile UserManager mUserManager;
     private volatile PermissionManager mPermissionManager;
     private volatile PackageInstaller mInstaller;
-    private volatile NvAppProfileService mAppProfileService;
     private volatile ArtManager mArtManager;
     private volatile DevicePolicyManager mDevicePolicyManager;
     private volatile String mPermissionsControllerPackageName;
@@ -476,15 +473,6 @@ public class ApplicationPackageManager extends PackageManager {
     public boolean isWirelessConsentModeEnabled() {
         return mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_wirelessConsentRequired);
-    }
-
-    /** @hide */
-    @Override
-    public NvAppProfileService getAppProfileService() {
-        if (mAppProfileService == null) {
-            mAppProfileService = new NvAppProfileService(mContext);
-        }
-        return mAppProfileService;
     }
 
     @Override
@@ -823,16 +811,6 @@ public class ApplicationPackageManager extends PackageManager {
             "com.google.android.apps.photos.PIXEL_2019_MIDYEAR_PRELOAD",
             "com.google.android.apps.photos.PIXEL_2018_PRELOAD",
             "com.google.android.apps.photos.PIXEL_2017_PRELOAD",
-            "com.google.android.feature.ASI",
-            "com.google.android.feature.ANDROID_ONE_EXPERIENCE",
-            "com.google.android.feature.GOOGLE_FI_BUNDLED",
-            "com.google.android.feature.LILY_EXPERIENCE",
-            "com.google.android.feature.TURBO_PRELOAD",
-            "com.google.android.feature.WELLBEING",
-            "com.google.android.feature.PIXEL_2024_EXPERIENCE",
-            "com.google.android.feature.PIXEL_2024_MIDYEAR_EXPERIENCE",
-            "com.google.android.feature.PIXEL_2023_EXPERIENCE",
-            "com.google.android.feature.PIXEL_2023_MIDYEAR_EXPERIENCE",
             "com.google.android.feature.PIXEL_2022_EXPERIENCE",
             "com.google.android.feature.PIXEL_2022_MIDYEAR_EXPERIENCE",
             "com.google.android.feature.PIXEL_2021_EXPERIENCE",
@@ -845,17 +823,15 @@ public class ApplicationPackageManager extends PackageManager {
             "com.google.android.feature.PIXEL_2017_EXPERIENCE",
             "com.google.android.feature.PIXEL_EXPERIENCE",
             "com.google.android.feature.GOOGLE_BUILD",
-            "com.google.android.feature.GOOGLE_EXPERIENCE",
-            "com.google.lens.feature.IMAGE_INTEGRATION",    
-            "com.google.lens.feature.CAMERA_INTEGRATION",
-            "com.google.photos.trust_debug_certs",
-            "com.google.android.feature.AER_OPTIMIZED",
-            "com.google.android.feature.NEXT_GENERATION_ASSISTANT"
+            "com.google.android.feature.GOOGLE_EXPERIENCE"
     };
 
     private static final String[] featuresNexus = {
             "com.google.android.apps.photos.NEXUS_PRELOAD",
-            "com.google.android.apps.photos.nexus_preload"
+            "com.google.android.apps.photos.nexus_preload",
+            "com.google.android.feature.PIXEL_EXPERIENCE",
+            "com.google.android.feature.GOOGLE_BUILD",
+            "com.google.android.feature.GOOGLE_EXPERIENCE"
     };
 
     @Override
@@ -863,7 +839,7 @@ public class ApplicationPackageManager extends PackageManager {
         String packageName = ActivityThread.currentPackageName();
         if (packageName != null &&
                 packageName.equals("com.google.android.apps.photos") &&
-                SystemProperties.getBoolean("persist.sys.pixelprops.gphotos", true)) {
+                SystemProperties.getBoolean("persist.sys.pixelprops.gphotos", false)) {
             if (Arrays.asList(featuresPixel).contains(name)) return false;
             if (Arrays.asList(featuresNexus).contains(name)) return true;
         }
